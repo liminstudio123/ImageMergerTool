@@ -257,6 +257,14 @@
                 aspect-ratio: 1;
             }
         }
+
+        .image-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 <body>
@@ -284,6 +292,17 @@
                 </div>
 
                 <div id="imageList"></div>
+
+                <div class="image-options">
+                    <label>
+                        <input type="checkbox" id="maintainAspectRatio" checked>
+                        保持原始比例
+                    </label>
+                    <label>
+                        <input type="checkbox" id="preserveMetadata" checked>
+                        保留元数据
+                    </label>
+                </div>
             </section>
 
             <section class="preview-section">
@@ -363,6 +382,19 @@
                 reader.onload = function(event) {
                     const img = new Image();
                     img.onload = function() {
+                        // 创建临时canvas保持原始质量
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = img.naturalWidth;
+                        tempCanvas.height = img.naturalHeight;
+                        const tempCtx = tempCanvas.getContext('2d', { alpha: true });
+                        
+                        // 设置最高质量渲染
+                        tempCtx.imageSmoothingEnabled = true;
+                        tempCtx.imageSmoothingQuality = 'high';
+                        tempCtx.drawImage(img, 0, 0);
+                        
+                        // 保存原始质量数据
+                        img.originalData = tempCanvas.toDataURL('image/png', 1.0);
                         resolve(img);
                     };
                     img.onerror = () => reject(new Error(`无法加载图片 ${file.name}`));
@@ -488,24 +520,87 @@
 
         function downloadImage() {
             if (canvas.style.display === 'none') {
-                alert('Please merge images first!');
+                alert('请先拼接图片！');
                 return;
             }
 
-            // 生成时间戳文件名
-            const now = new Date();
-            const timestamp = now.getFullYear() +
-                ('0' + (now.getMonth() + 1)).slice(-2) +
-                ('0' + now.getDate()).slice(-2) + '_' +
-                ('0' + now.getHours()).slice(-2) +
-                ('0' + now.getMinutes()).slice(-2) +
-                ('0' + now.getSeconds()).slice(-2);
+            // 使用 Blob 对象处理大文件
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const now = new Date();
+                const timestamp = now.getFullYear() +
+                    ('0' + (now.getMonth() + 1)).slice(-2) +
+                    ('0' + now.getDate()).slice(-2) + '_' +
+                    ('0' + now.getHours()).slice(-2) +
+                    ('0' + now.getMinutes()).slice(-2) +
+                    ('0' + now.getSeconds()).slice(-2);
 
-            const link = document.createElement('a');
-            link.download = `merged_${timestamp}.png`; // 例如: merged_20240220_153022.png
-            link.href = canvas.toDataURL('image/png', 1.0);
-            link.click();
+                const link = document.createElement('a');
+                link.download = `merged_${timestamp}.png`;
+                link.href = url;
+                link.click();
+                
+                // 清理 URL 对象
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }, 'image/png', 1.0);
         }
+
+        // 添加拖拽排序
+        let dragSrcEl = null;
+
+        function handleDragStart(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            this.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            if (dragSrcEl !== this) {
+                const srcIndex = dragSrcEl.getAttribute('data-index');
+                const destIndex = this.getAttribute('data-index');
+                const temp = images[srcIndex];
+                images[srcIndex] = images[destIndex];
+                images[destIndex] = temp;
+                updateImageList();
+            }
+            return false;
+        }
+
+        function updateProgress(current, total) {
+            const progress = document.createElement('div');
+            progress.className = 'progress';
+            progress.innerHTML = `处理进度: ${current}/${total}`;
+            document.querySelector('.loading').appendChild(progress);
+        }
+
+        async function retryOperation(operation, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    return await operation();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                }
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 's') {
+                    e.preventDefault();
+                    downloadImage();
+                } else if (e.key === 'z') {
+                    e.preventDefault();
+                    undoLastAction();
+                }
+            }
+        });
     </script>
 
     <!-- Google AdSense 代码预留位置 -->
