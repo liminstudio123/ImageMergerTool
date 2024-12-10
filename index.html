@@ -307,36 +307,71 @@
         const imageList = document.getElementById('imageList');
         const loading = document.querySelector('.loading');
 
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const files = Array.from(e.target.files);
-            loading.style.display = 'block';
-            
-            Promise.all(files.map(file => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        const img = new Image();
-                        img.onload = function() {
-                            resolve(img);
-                        };
-                        img.onerror = reject;
-                        img.src = event.target.result;
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            }))
-            .then(loadedImages => {
-                images.push(...loadedImages);
-                updateImageList();
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            try {
+                // 清空之前的图片和画布
+                images = [];
+                const imageList = document.getElementById('imageList');
+                imageList.innerHTML = '';
+                canvas.style.display = 'none';
+                downloadBtn.disabled = true;
+                
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+                
+                loading.style.display = 'block';
+                
+                // 限制图片大小和数量
+                const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+                const MAX_FILES = 10;
+
+                if (files.length > MAX_FILES) {
+                    alert(`一次最多只能选择 ${MAX_FILES} 张图片`);
+                    loading.style.display = 'none';
+                    return;
+                }
+
+                for (const file of files) {
+                    if (file.size > MAX_FILE_SIZE) {
+                        alert(`图片 ${file.name} 太大，请选择小于20MB的图片`);
+                        loading.style.display = 'none';
+                        return;
+                    }
+                }
+
+                // 逐个处理图片
+                for (const file of files) {
+                    const img = await loadImage(file);
+                    images.push(img);
+                    updateImageList(); // 实时更新预览
+                }
+
                 loading.style.display = 'none';
-            })
-            .catch(error => {
+            } catch (error) {
                 console.error('Error loading images:', error);
+                alert('加载图片时出错，请重试');
                 loading.style.display = 'none';
-                alert('Error loading some images. Please try again.');
-            });
+            }
+
+            this.value = '';
         });
+
+        // 添加图片加载函数
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        resolve(img);
+                    };
+                    img.onerror = () => reject(new Error(`无法加载图片 ${file.name}`));
+                    img.src = event.target.result;
+                };
+                reader.onerror = () => reject(new Error(`无法读取文件 ${file.name}`));
+                reader.readAsDataURL(file);
+            });
+        }
 
         // 其余函数保持不变
         function updateImageList() {
@@ -367,60 +402,88 @@
             canvas.style.display = 'none';
         }
 
-        function mergeHorizontal() {
+        async function mergeHorizontal() {
             if (images.length === 0) return;
-            loading.style.display = 'block';
             
-            const height = images[0].height;
-            let totalWidth = 0;
-            
-            images.forEach(img => {
-                const ratio = height / img.height;
-                totalWidth += img.width * ratio;
-            });
+            try {
+                loading.style.display = 'block';
+                
+                // 使用 requestAnimationFrame 避免界面卡顿
+                await new Promise(resolve => requestAnimationFrame(resolve));
 
-            canvas.width = totalWidth;
-            canvas.height = height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const height = Math.max(...images.map(img => img.naturalHeight));
+                let totalWidth = 0;
+                
+                images.forEach(img => {
+                    const ratio = height / img.naturalHeight;
+                    totalWidth += img.naturalWidth * ratio;
+                });
 
-            let x = 0;
-            images.forEach(img => {
-                const ratio = height / img.height;
-                const width = img.width * ratio;
-                ctx.drawImage(img, x, 0, width, height);
-                x += width;
-            });
+                canvas.width = totalWidth;
+                canvas.height = height;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            canvas.style.display = 'block';
-            loading.style.display = 'none';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                let x = 0;
+                for (const img of images) {
+                    const ratio = height / img.naturalHeight;
+                    const width = img.naturalWidth * ratio;
+                    ctx.drawImage(img, x, 0, width, height);
+                    x += width;
+                    // 每绘制一张图片后让出主线程
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                canvas.style.display = 'block';
+            } catch (error) {
+                console.error('Error merging images:', error);
+                alert('合并图片时出错，请重试');
+            } finally {
+                loading.style.display = 'none';
+            }
         }
 
-        function mergeVertical() {
+        async function mergeVertical() {
             if (images.length === 0) return;
-            loading.style.display = 'block';
             
-            const width = images[0].width;
-            let totalHeight = 0;
-            
-            images.forEach(img => {
-                const ratio = width / img.width;
-                totalHeight += img.height * ratio;
-            });
+            try {
+                loading.style.display = 'block';
+                
+                await new Promise(resolve => requestAnimationFrame(resolve));
 
-            canvas.width = width;
-            canvas.height = totalHeight;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const width = Math.max(...images.map(img => img.naturalWidth));
+                let totalHeight = 0;
+                
+                images.forEach(img => {
+                    const ratio = width / img.naturalWidth;
+                    totalHeight += img.naturalHeight * ratio;
+                });
 
-            let y = 0;
-            images.forEach(img => {
-                const ratio = width / img.width;
-                const height = img.height * ratio;
-                ctx.drawImage(img, 0, y, width, height);
-                y += height;
-            });
+                canvas.width = width;
+                canvas.height = totalHeight;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            canvas.style.display = 'block';
-            loading.style.display = 'none';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                let y = 0;
+                for (const img of images) {
+                    const ratio = width / img.naturalWidth;
+                    const height = img.naturalHeight * ratio;
+                    ctx.drawImage(img, 0, y, width, height);
+                    y += height;
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                canvas.style.display = 'block';
+            } catch (error) {
+                console.error('Error merging images:', error);
+                alert('合并图片时出错，请重试');
+            } finally {
+                loading.style.display = 'none';
+            }
         }
 
         function downloadImage() {
@@ -429,9 +492,18 @@
                 return;
             }
 
+            // 生成时间戳文件名
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                ('0' + (now.getMonth() + 1)).slice(-2) +
+                ('0' + now.getDate()).slice(-2) + '_' +
+                ('0' + now.getHours()).slice(-2) +
+                ('0' + now.getMinutes()).slice(-2) +
+                ('0' + now.getSeconds()).slice(-2);
+
             const link = document.createElement('a');
-            link.download = 'merged-image.png';
-            link.href = canvas.toDataURL('image/png');
+            link.download = `merged_${timestamp}.png`; // 例如: merged_20240220_153022.png
+            link.href = canvas.toDataURL('image/png', 1.0);
             link.click();
         }
     </script>
