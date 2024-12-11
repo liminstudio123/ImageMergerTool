@@ -408,7 +408,7 @@
                 const MAX_FILES = 10;
 
                 if (files.length > MAX_FILES) {
-                    alert(`一次最多只能选择 ${MAX_FILES} 张图���`);
+                    alert(`一次最多只能选择 ${MAX_FILES} 张图片`);
                     loading.style.display = 'none';
                     return;
                 }
@@ -522,7 +522,7 @@
             try {
                 loading.style.display = 'block';
                 
-                // 使��� requestAnimationFrame 避免界面卡顿
+                // 使用 requestAnimationFrame 避免界面卡顿
                 await new Promise(resolve => requestAnimationFrame(resolve));
 
                 const height = Math.max(...images.map(img => img.naturalHeight));
@@ -553,7 +553,7 @@
                 canvas.style.display = 'block';
             } catch (error) {
                 console.error('Error merging images:', error);
-                alert('合并图片时出错，请重试');
+                alert('���并图片时出错，请重试');
             } finally {
                 loading.style.display = 'none';
             }
@@ -627,7 +627,7 @@
             }, 'image/png', 1.0);
         }
 
-        // 添加拖拽相关的事���处理函数
+        // 添加拖拽相关的事件处理函数
         let dragSrcEl = null;
 
         function handleDragStart(e) {
@@ -755,14 +755,11 @@
         }
 
         function handleTouchMove(e) {
-            // 如果没有开始拖动，允许页面正常滚动
             if (!isDragging) {
-                // 检查是否应该取消长按
                 const touch = e.touches[0];
                 const deltaY = touch.clientY - touchStartY;
                 const deltaX = touch.clientX - touchStartX;
                 
-                // 如果移动距离超过阈值，取消长按
                 if (Math.abs(deltaY) > 10 || Math.abs(deltaX) > 10) {
                     if (touchTimeout) {
                         clearTimeout(touchTimeout);
@@ -784,37 +781,71 @@
                 touchElement.style.top = (elementStartY + deltaY) + 'px';
             });
             
-            // 获取当前位置下最近的目标元素
-            const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
-            const targetElement = elements.find(el => 
-                el.classList.contains('image-item') && el !== touchElement
-            );
+            // 获取所有图片项
+            const imageItems = Array.from(document.querySelectorAll('.image-item'));
+            const currentIndex = parseInt(touchElement.getAttribute('data-index'));
             
-            if (targetElement) {
-                const targetIndex = parseInt(targetElement.getAttribute('data-index'));
-                if (targetIndex !== initialIndex) {
-                    // 交换图片数组中的位置
-                    [images[initialIndex], images[targetIndex]] = [images[targetIndex], images[initialIndex]];
-                    initialIndex = targetIndex;
-                    
-                    // 更新列表，但保持当前拖动元素
-                    const currentTransform = touchElement.style.transform;
-                    const currentPosition = {
-                        left: touchElement.style.left,
-                        top: touchElement.style.top,
-                        position: touchElement.style.position,
-                        width: touchElement.style.width,
-                        opacity: touchElement.style.opacity,
-                        zIndex: touchElement.style.zIndex
-                    };
-                    
-                    updateImageList();
-                    
-                    // 恢复触摸元素的状态
-                    touchElement = document.querySelector(`[data-index="${targetIndex}"]`);
-                    Object.assign(touchElement.style, currentPosition);
-                    touchElement.style.transform = currentTransform;
+            // 计算每个图片项的中心点
+            const itemCenters = imageItems.map((item, index) => {
+                if (index === currentIndex) return null;
+                const rect = item.getBoundingClientRect();
+                return {
+                    index,
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                };
+            });
+            
+            // 计算触摸点与各个图片中心点的距离
+            const touchPoint = {
+                x: touch.clientX,
+                y: touch.clientY
+            };
+            
+            let closestItem = null;
+            let minDistance = Infinity;
+            
+            itemCenters.forEach(center => {
+                if (!center) return;
+                
+                const distance = Math.sqrt(
+                    Math.pow(touchPoint.x - center.x, 2) + 
+                    Math.pow(touchPoint.y - center.y, 2)
+                );
+                
+                // 添加一个阈值，确保足够接近才触发交换
+                if (distance < minDistance && distance < 50) { // 50px的阈值
+                    minDistance = distance;
+                    closestItem = center;
                 }
+            });
+            
+            if (closestItem && closestItem.index !== initialIndex) {
+                // 交换图片位置
+                [images[initialIndex], images[closestItem.index]] = 
+                [images[closestItem.index], images[initialIndex]];
+                
+                // 保存当前拖动元素的状态
+                const currentTransform = touchElement.style.transform;
+                const currentPosition = {
+                    left: touchElement.style.left,
+                    top: touchElement.style.top,
+                    position: touchElement.style.position,
+                    width: touchElement.style.width,
+                    opacity: touchElement.style.opacity,
+                    zIndex: touchElement.style.zIndex
+                };
+                
+                // 更新图片列表
+                updateImageList();
+                
+                // 恢复拖动元素的状态
+                touchElement = document.querySelector(`[data-index="${closestItem.index}"]`);
+                Object.assign(touchElement.style, currentPosition);
+                touchElement.style.transform = currentTransform;
+                
+                // 更新初始索引
+                initialIndex = closestItem.index;
             }
         }
 
