@@ -408,7 +408,7 @@
                 const MAX_FILES = 10;
 
                 if (files.length > MAX_FILES) {
-                    alert(`一次最多只能选择 ${MAX_FILES} 张图片`);
+                    alert(`一次最多只能选择 ${MAX_FILES} 张图���`);
                     loading.style.display = 'none';
                     return;
                 }
@@ -553,7 +553,7 @@
                 canvas.style.display = 'block';
             } catch (error) {
                 console.error('Error merging images:', error);
-                alert('���并图片时出错，请重试');
+                alert('合并图片时出错，请重试');
             } finally {
                 loading.style.display = 'none';
             }
@@ -704,7 +704,7 @@
             }
         });
 
-        // 修改触摸相关的变量，添加长按判断相关变量
+        // 修改触摸相关的变量和函数
         let touchStartY = 0;
         let touchStartX = 0;
         let touchElement = null;
@@ -713,30 +713,33 @@
         let elementStartY = 0;
         let touchTimeout = null;
         let isDragging = false;
-        const TOUCH_DELAY = 300; // 300毫秒后才开始拖动
+        let lastSwapTime = 0;
+        const TOUCH_DELAY = 300;
+        const SWAP_COOLDOWN = 200; // 添加交换冷却时间
 
         function handleTouchStart(e) {
+            // 如果触摸到删除按钮，不启动拖动
+            if (e.target.classList.contains('delete-btn')) {
+                return;
+            }
+
             const touch = e.touches[0];
             touchStartY = touch.clientY;
             touchStartX = touch.clientX;
             
-            // 清除之前的timeout（如果有的话）
             if (touchTimeout) {
                 clearTimeout(touchTimeout);
             }
             
-            // 设置长按定时器
             touchTimeout = setTimeout(() => {
                 isDragging = true;
                 touchElement = this;
                 initialIndex = parseInt(this.getAttribute('data-index'));
                 
-                // 记录元素的初始位置
                 const rect = touchElement.getBoundingClientRect();
                 elementStartX = rect.left;
                 elementStartY = rect.top;
                 
-                // 添加正在触摸的视觉效果
                 requestAnimationFrame(() => {
                     touchElement.style.position = 'fixed';
                     touchElement.style.left = elementStartX + 'px';
@@ -747,7 +750,6 @@
                     touchElement.style.zIndex = '1000';
                 });
                 
-                // 添加震动反馈（如果设备支持）
                 if (navigator.vibrate) {
                     navigator.vibrate(50);
                 }
@@ -757,10 +759,11 @@
         function handleTouchMove(e) {
             if (!isDragging) {
                 const touch = e.touches[0];
-                const deltaY = touch.clientY - touchStartY;
-                const deltaX = touch.clientX - touchStartX;
+                const deltaY = Math.abs(touch.clientY - touchStartY);
+                const deltaX = Math.abs(touch.clientX - touchStartX);
                 
-                if (Math.abs(deltaY) > 10 || Math.abs(deltaX) > 10) {
+                // 增加移动阈值，使滑动更容易触发
+                if (deltaY > 5 || deltaX > 5) {
                     if (touchTimeout) {
                         clearTimeout(touchTimeout);
                         touchTimeout = null;
@@ -781,51 +784,45 @@
                 touchElement.style.top = (elementStartY + deltaY) + 'px';
             });
             
-            // 获取所有图片项
+            // 检查是否可以进行交换
+            const now = Date.now();
+            if (now - lastSwapTime < SWAP_COOLDOWN) {
+                return;
+            }
+
             const imageItems = Array.from(document.querySelectorAll('.image-item'));
             const currentIndex = parseInt(touchElement.getAttribute('data-index'));
             
-            // 计算每个图片项的中心点
-            const itemCenters = imageItems.map((item, index) => {
-                if (index === currentIndex) return null;
-                const rect = item.getBoundingClientRect();
-                return {
-                    index,
-                    x: rect.left + rect.width / 2,
-                    y: rect.top + rect.height / 2
-                };
-            });
-            
-            // 计算触摸点与各个图片中心点的距离
-            const touchPoint = {
-                x: touch.clientX,
-                y: touch.clientY
-            };
-            
+            // 找到最近的目标位置
             let closestItem = null;
             let minDistance = Infinity;
             
-            itemCenters.forEach(center => {
-                if (!center) return;
+            imageItems.forEach((item, index) => {
+                if (index === currentIndex) return;
+                
+                const rect = item.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
                 
                 const distance = Math.sqrt(
-                    Math.pow(touchPoint.x - center.x, 2) + 
-                    Math.pow(touchPoint.y - center.y, 2)
+                    Math.pow(touch.clientX - centerX, 2) + 
+                    Math.pow(touch.clientY - centerY, 2)
                 );
                 
-                // 添加一个阈值，确保足够接近才触发交换
-                if (distance < minDistance && distance < 50) { // 50px的阈值
+                if (distance < minDistance && distance < rect.width) {
                     minDistance = distance;
-                    closestItem = center;
+                    closestItem = {
+                        index,
+                        element: item
+                    };
                 }
             });
             
             if (closestItem && closestItem.index !== initialIndex) {
-                // 交换图片位置
-                [images[initialIndex], images[closestItem.index]] = 
-                [images[closestItem.index], images[initialIndex]];
+                lastSwapTime = now;
                 
-                // 保存当前拖动元素的状态
+                // 保存当前状态
+                const draggedImage = images[initialIndex];
                 const currentTransform = touchElement.style.transform;
                 const currentPosition = {
                     left: touchElement.style.left,
@@ -836,7 +833,18 @@
                     zIndex: touchElement.style.zIndex
                 };
                 
-                // 更新图片列表
+                // 重新排序图片数组
+                if (closestItem.index < initialIndex) {
+                    // 向前移动
+                    images.splice(initialIndex, 1);
+                    images.splice(closestItem.index, 0, draggedImage);
+                } else {
+                    // 向后移动
+                    images.splice(closestItem.index + 1, 0, draggedImage);
+                    images.splice(initialIndex, 1);
+                }
+                
+                // 更新显示
                 updateImageList();
                 
                 // 恢复拖动元素的状态
@@ -844,7 +852,6 @@
                 Object.assign(touchElement.style, currentPosition);
                 touchElement.style.transform = currentTransform;
                 
-                // 更新初始索引
                 initialIndex = closestItem.index;
             }
         }
