@@ -268,14 +268,20 @@
 
         .image-item {
             cursor: move;
+            touch-action: none;
             transition: transform 0.2s ease, opacity 0.2s ease;
+            position: relative;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
         .image-item.over {
             border: 2px dashed #4CAF50;
         }
         .image-item.dragging {
-            opacity: 0.5;
-            transform: scale(0.95);
+            opacity: 0.8;
+            transform: scale(1.05);
+            z-index: 1000;
         }
     </style>
 </head>
@@ -423,15 +429,21 @@
             images.forEach((img, index) => {
                 const div = document.createElement('div');
                 div.className = 'image-item';
-                // 添加拖拽相关属性
-                div.draggable = true;
                 div.setAttribute('data-index', index);
                 
-                // 添加拖拽事件监听器
+                // 同时支持拖拽和触摸
+                div.draggable = true;
+                
+                // 桌面端拖拽事件
                 div.addEventListener('dragstart', handleDragStart);
                 div.addEventListener('dragend', handleDragEnd);
                 div.addEventListener('dragover', handleDragOver);
                 div.addEventListener('drop', handleDrop);
+                
+                // 移动端触摸事件
+                div.addEventListener('touchstart', handleTouchStart, false);
+                div.addEventListener('touchmove', handleTouchMove, false);
+                div.addEventListener('touchend', handleTouchEnd, false);
                 
                 const imgElement = document.createElement('img');
                 imgElement.src = img.src;
@@ -440,7 +452,7 @@
                 deleteBtn.className = 'delete-btn';
                 deleteBtn.textContent = '×';
                 deleteBtn.onclick = (e) => {
-                    e.stopPropagation(); // 防止触发拖拽
+                    e.stopPropagation();
                     deleteImage(index);
                 };
                 
@@ -645,6 +657,74 @@
                 }
             }
         });
+
+        // 添加以下触摸相关的变量和函数
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let touchElement = null;
+        let initialIndex = null;
+        let currentTranslate = 0;
+
+        function handleTouchStart(e) {
+            const touch = e.touches[0];
+            touchStartY = touch.clientY;
+            touchStartX = touch.clientX;
+            touchElement = this;
+            initialIndex = parseInt(this.getAttribute('data-index'));
+            
+            // 添加正在触摸的视觉效果
+            this.style.opacity = '0.8';
+            this.style.transform = 'scale(1.05)';
+            this.style.zIndex = '1000';
+        }
+
+        function handleTouchMove(e) {
+            if (!touchElement) return;
+            
+            e.preventDefault();
+            const touch = e.touches[0];
+            const deltaY = touch.clientY - touchStartY;
+            const deltaX = touch.clientX - touchStartX;
+            
+            // 移动当前元素
+            touchElement.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.05)`;
+            
+            // 获取当前位置下最近的目标元素
+            const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+            const targetElement = elements.find(el => 
+                el.classList.contains('image-item') && el !== touchElement
+            );
+            
+            if (targetElement) {
+                const targetIndex = parseInt(targetElement.getAttribute('data-index'));
+                if (targetIndex !== initialIndex) {
+                    // 交换图片数组中的位置
+                    [images[initialIndex], images[targetIndex]] = [images[targetIndex], images[initialIndex]];
+                    initialIndex = targetIndex;
+                    updateImageList();
+                    
+                    // 恢复触摸元素的状态
+                    touchElement = document.querySelector(`[data-index="${targetIndex}"]`);
+                    touchElement.style.opacity = '0.8';
+                    touchElement.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.05)`;
+                    touchElement.style.zIndex = '1000';
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchElement) return;
+            
+            // 恢复元素样式
+            touchElement.style.opacity = '';
+            touchElement.style.transform = '';
+            touchElement.style.zIndex = '';
+            
+            touchElement = null;
+            initialIndex = null;
+            touchStartX = 0;
+            touchStartY = 0;
+        }
     </script>
 
     <!-- Google AdSense 代码预留位置 -->
