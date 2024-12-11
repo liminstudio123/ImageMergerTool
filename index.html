@@ -12,6 +12,17 @@
     <meta name="theme-color" content="#4361ee">
     
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YCZZ97417V"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-YCZZ97417V');
+    </script>
+    
     <style>
         :root {
             --primary-color: #4361ee;
@@ -408,14 +419,14 @@
                 const MAX_FILES = 10;
 
                 if (files.length > MAX_FILES) {
-                    alert(`一次最多只能选择 ${MAX_FILES} 张图���`);
+                    alert(`一次最多只能选择 ${MAX_FILES} 张图片`);
                     loading.style.display = 'none';
                     return;
                 }
 
                 for (const file of files) {
                     if (file.size > MAX_FILE_SIZE) {
-                        alert(`图片 ${file.name} 太大，请���择小于20MB的图片`);
+                        alert(`图片 ${file.name} 太大，请选择小于20MB的图片`);
                         loading.style.display = 'none';
                         return;
                     }
@@ -855,7 +866,7 @@
                 touchElement.style.top = (elementStartY + deltaY) + 'px';
             });
             
-            // 检查是否可以进行交换
+            // 检查是��可以进行交换
             const now = Date.now();
             if (now - lastSwapTime < SWAP_COOLDOWN) {
                 return;
