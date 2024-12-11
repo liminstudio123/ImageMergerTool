@@ -408,7 +408,7 @@
                 const MAX_FILES = 10;
 
                 if (files.length > MAX_FILES) {
-                    alert(`一次最多只能选择 ${MAX_FILES} 张图���`);
+                    alert(`一次最多只能选择 ${MAX_FILES} 张图片`);
                     loading.style.display = 'none';
                     return;
                 }
@@ -522,35 +522,62 @@
             try {
                 loading.style.display = 'block';
                 
-                // 使用 requestAnimationFrame 避免界面卡顿
                 await new Promise(resolve => requestAnimationFrame(resolve));
 
-                const height = Math.max(...images.map(img => img.naturalHeight));
+                // 计算最大高度和总宽度
+                let maxHeight = 0;
                 let totalWidth = 0;
                 
+                // 首先计算最大高度
                 images.forEach(img => {
-                    const ratio = height / img.naturalHeight;
-                    totalWidth += img.naturalWidth * ratio;
+                    const height = img.naturalHeight;
+                    maxHeight = Math.max(maxHeight, height);
+                });
+                
+                // 根据最大高度计算每张图片的缩放比例和宽度
+                const scaledWidths = images.map(img => {
+                    const scale = maxHeight / img.naturalHeight;
+                    const scaledWidth = Math.round(img.naturalWidth * scale);
+                    totalWidth += scaledWidth;
+                    return scaledWidth;
                 });
 
+                // 设置画布尺寸
                 canvas.width = totalWidth;
-                canvas.height = height;
+                canvas.height = maxHeight;
+                
+                // 清空画布
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+                
+                // 设置绘图质量
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
 
-                let x = 0;
-                for (const img of images) {
-                    const ratio = height / img.naturalHeight;
-                    const width = img.naturalWidth * ratio;
-                    ctx.drawImage(img, x, 0, width, height);
-                    x += width;
-                    // 每绘制一张图片后让出主线程
+                // 绘制图片
+                let currentX = 0;
+                for (let i = 0; i < images.length; i++) {
+                    const img = images[i];
+                    const scaledWidth = scaledWidths[i];
+                    const scale = maxHeight / img.naturalHeight;
+                    
+                    // 使用原始图片数据进行绘制
+                    ctx.drawImage(
+                        img,
+                        currentX,                    // x 坐标
+                        0,                          // y 坐标
+                        scaledWidth,                // 缩放后的宽度
+                        maxHeight                   // 统一的高度
+                    );
+                    
+                    currentX += scaledWidth;
+                    
+                    // 让出主线程
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
 
                 canvas.style.display = 'block';
+                downloadBtn.disabled = false;
+                
             } catch (error) {
                 console.error('Error merging images:', error);
                 alert('合并图片时出错，请重试');
@@ -668,7 +695,7 @@
                 // 交换图片位置
                 [images[srcIndex], images[destIndex]] = [images[destIndex], images[srcIndex]];
                 
-                // 更新显示
+                // 更��显示
                 updateImageList();
             }
             return false;
