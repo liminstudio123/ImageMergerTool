@@ -489,6 +489,7 @@
                 div.addEventListener('touchstart', handleTouchStart, false);
                 div.addEventListener('touchmove', handleTouchMove, false);
                 div.addEventListener('touchend', handleTouchEnd, false);
+                div.addEventListener('touchcancel', handleTouchCancel, false);
                 
                 const imgElement = document.createElement('img');
                 imgElement.src = img.src;
@@ -521,7 +522,7 @@
             try {
                 loading.style.display = 'block';
                 
-                // 使用 requestAnimationFrame 避免界面卡顿
+                // 使��� requestAnimationFrame 避免界面卡顿
                 await new Promise(resolve => requestAnimationFrame(resolve));
 
                 const height = Math.max(...images.map(img => img.naturalHeight));
@@ -626,7 +627,7 @@
             }, 'image/png', 1.0);
         }
 
-        // 添加拖拽相关的事件处理函数
+        // 添加拖拽相关的事���处理函数
         let dragSrcEl = null;
 
         function handleDragStart(e) {
@@ -703,39 +704,74 @@
             }
         });
 
-        // 修改触摸相关的变量和函数
+        // 修改触摸相关的变量，添加长按判断相关变量
         let touchStartY = 0;
         let touchStartX = 0;
         let touchElement = null;
         let initialIndex = null;
         let elementStartX = 0;
         let elementStartY = 0;
+        let touchTimeout = null;
+        let isDragging = false;
+        const TOUCH_DELAY = 300; // 300毫秒后才开始拖动
 
         function handleTouchStart(e) {
             const touch = e.touches[0];
             touchStartY = touch.clientY;
             touchStartX = touch.clientX;
-            touchElement = this;
-            initialIndex = parseInt(this.getAttribute('data-index'));
             
-            // 记录元素的初始位置
-            const rect = touchElement.getBoundingClientRect();
-            elementStartX = rect.left;
-            elementStartY = rect.top;
+            // 清除之前的timeout（如果有的话）
+            if (touchTimeout) {
+                clearTimeout(touchTimeout);
+            }
             
-            // 添加正在触摸的视觉效果
-            requestAnimationFrame(() => {
-                touchElement.style.position = 'fixed';
-                touchElement.style.left = elementStartX + 'px';
-                touchElement.style.top = elementStartY + 'px';
-                touchElement.style.width = rect.width + 'px';
-                touchElement.style.opacity = '0.8';
-                touchElement.style.transform = 'scale(1.05)';
-                touchElement.style.zIndex = '1000';
-            });
+            // 设置长按定时器
+            touchTimeout = setTimeout(() => {
+                isDragging = true;
+                touchElement = this;
+                initialIndex = parseInt(this.getAttribute('data-index'));
+                
+                // 记录元素的初始位置
+                const rect = touchElement.getBoundingClientRect();
+                elementStartX = rect.left;
+                elementStartY = rect.top;
+                
+                // 添加正在触摸的视觉效果
+                requestAnimationFrame(() => {
+                    touchElement.style.position = 'fixed';
+                    touchElement.style.left = elementStartX + 'px';
+                    touchElement.style.top = elementStartY + 'px';
+                    touchElement.style.width = rect.width + 'px';
+                    touchElement.style.opacity = '0.8';
+                    touchElement.style.transform = 'scale(1.05)';
+                    touchElement.style.zIndex = '1000';
+                });
+                
+                // 添加震动反馈（如果设备支持）
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+            }, TOUCH_DELAY);
         }
 
         function handleTouchMove(e) {
+            // 如果没有开始拖动，允许页面正常滚动
+            if (!isDragging) {
+                // 检查是否应该取消长按
+                const touch = e.touches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                
+                // 如果移动距离超过阈值，取消长按
+                if (Math.abs(deltaY) > 10 || Math.abs(deltaX) > 10) {
+                    if (touchTimeout) {
+                        clearTimeout(touchTimeout);
+                        touchTimeout = null;
+                    }
+                }
+                return;
+            }
+            
             if (!touchElement) return;
             
             e.preventDefault();
@@ -743,9 +779,7 @@
             const deltaY = touch.clientY - touchStartY;
             const deltaX = touch.clientX - touchStartX;
             
-            // 使用 requestAnimationFrame 进行平滑移动
             requestAnimationFrame(() => {
-                // 移动当前元素
                 touchElement.style.left = (elementStartX + deltaX) + 'px';
                 touchElement.style.top = (elementStartY + deltaY) + 'px';
             });
@@ -785,11 +819,20 @@
         }
 
         function handleTouchEnd(e) {
+            // 清除长按定时器
+            if (touchTimeout) {
+                clearTimeout(touchTimeout);
+                touchTimeout = null;
+            }
+            
+            // 如果没有开始拖动，直接返回
+            if (!isDragging) {
+                return;
+            }
+            
             if (!touchElement) return;
             
-            // 使用 requestAnimationFrame 确保平滑过渡
             requestAnimationFrame(() => {
-                // 重置元素样式
                 touchElement.style.position = '';
                 touchElement.style.left = '';
                 touchElement.style.top = '';
@@ -804,7 +847,17 @@
                 touchStartY = 0;
                 elementStartX = 0;
                 elementStartY = 0;
+                isDragging = false;
             });
+        }
+
+        // 添加触摸取消处理
+        function handleTouchCancel(e) {
+            if (touchTimeout) {
+                clearTimeout(touchTimeout);
+                touchTimeout = null;
+            }
+            handleTouchEnd(e);
         }
     </script>
 
