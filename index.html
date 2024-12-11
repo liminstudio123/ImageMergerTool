@@ -42,6 +42,7 @@
             padding: 2rem 0;
             text-align: center;
             margin-bottom: 2rem;
+            margin-top: 0;
         }
 
         .header h1 {
@@ -283,9 +284,53 @@
             transform: scale(1.05);
             z-index: 1000;
         }
+
+        .privacy-banner {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            padding: 0.75rem 0;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        .privacy-banner p {
+            margin: 0;
+            text-align: center;
+        }
+
+        .privacy-banner p::before {
+            content: '🔒';
+            margin-right: 0.5rem;
+        }
+
+        .privacy-details {
+            display: none;
+            padding: 0.5rem 0;
+            font-size: 0.85rem;
+        }
+
+        .privacy-details ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .privacy-banner:hover .privacy-details {
+            display: block;
+        }
     </style>
 </head>
 <body>
+    <!-- 添加隐私提示横幅 -->
+    <div class="privacy-banner">
+        <div class="container">
+            <p>🔒 Privacy Notice: This tool processes all images locally in your browser. We do not store, collect, or transmit any of your images or personal data.</p>
+        </div>
+    </div>
+
     <header class="header">
         <div class="container">
             <h1>Professional Image Merger</h1>
